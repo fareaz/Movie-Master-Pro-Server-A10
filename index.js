@@ -20,12 +20,39 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+const verifyToken = async (req, res, next) => {
+  const authorization = req.headers.authorization;
+
+  if (!authorization) {
+    return res.status(401).send({
+      message: "unauthorized access. Token not found!",
+    });
+  }
+
+  const token = authorization.split(" ")[1];
+  try {
+    await admin.auth().verifyIdToken(token);
+
+    next();
+  } catch (error) {
+    res.status(401).send({
+      message: "unauthorized access.",
+    });
+  }
+};
 
 async function run() {
   try {
- 
-    await client.connect();
-   
+       await client.connect();
+       const db = client.db("MovieMaster-db");
+       const movieCollection = db.collection("movies");
+
+        app.get("/movies", async (req, res) => {
+      const result = await movieCollection.find().toArray();
+      res.send(result);
+    });
+
+
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
