@@ -51,6 +51,14 @@ async function run() {
       const result = await movieCollection.find().toArray();
       res.send(result);
     });
+      app.post("/movies",   async (req, res) => {
+      const data = req.body;
+      const result = await movieCollection.insertOne(data);
+      res.send({
+        success: true,
+        result,
+      });
+    });
 
 
     await client.db("admin").command({ ping: 1 });
