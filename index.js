@@ -63,7 +63,7 @@ async function run() {
   });
 
 //delete
- app.delete("/movies/:id",  async (req, res) => {
+ app.delete("/movies/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       const result = await movieCollection.deleteOne({ _id: new ObjectId(id) });
 
@@ -73,7 +73,7 @@ async function run() {
       });
     });
     //update
-    app.put("/movie/:id",  async (req, res) => {
+    app.put("/movie/:id", verifyToken,  async (req, res) => {
       const { id } = req.params;
       // console.log(id)
       const data = req.body;
@@ -90,11 +90,18 @@ async function run() {
         result,
       });
     });
+    //my movies
+    app.get("/my-movies", verifyToken, async(req, res) => {
+      const email = req.query.email
+      const result = await movieCollection.find({
+addedBy: email}).toArray()
+      res.send(result)
+    })
  
 
 
     
-      app.post("/movies",   async (req, res) => {
+      app.post("/movies", verifyToken,  async (req, res) => {
       const data = req.body;
       const result = await movieCollection.insertOne(data);
       res.send({
