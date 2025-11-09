@@ -72,6 +72,24 @@ async function run() {
         result,
       });
     });
+    //update
+    app.put("/movie/:id",  async (req, res) => {
+      const { id } = req.params;
+      // console.log(id)
+      const data = req.body;
+      // console.log(data)
+      const objectId = new ObjectId(id);
+      const filter = { _id:objectId };
+      const update = {
+        $set: data,
+      };
+      const result = await movieCollection.updateOne(filter, update);
+
+      res.send({
+        success: true,
+        result,
+      });
+    });
  
 
 
