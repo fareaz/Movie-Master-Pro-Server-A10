@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express =require("express")
 const cors = require("cors")
 const app = express()
@@ -47,10 +47,35 @@ async function run() {
        const db = client.db("MovieMaster-db");
        const movieCollection = db.collection("movies");
 
-        app.get("/movies", async (req, res) => {
+      app.get("/movies", async (req, res) => {
       const result = await movieCollection.find().toArray();
       res.send(result);
     });
+
+      app.get("/movieDetails/:id",async (req, res) => {
+        const {id }= req.params;
+        const _id = new ObjectId(id);
+        const result = await movieCollection.findOne({ _id});
+         res.send({
+        success: true,
+        result,
+      });  
+  });
+
+//delete
+ app.delete("/movies/:id",  async (req, res) => {
+      const { id } = req.params;
+      const result = await movieCollection.deleteOne({ _id: new ObjectId(id) });
+
+      res.send({
+        success: true,
+        result,
+      });
+    });
+ 
+
+
+    
       app.post("/movies",   async (req, res) => {
       const data = req.body;
       const result = await movieCollection.insertOne(data);
