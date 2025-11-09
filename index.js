@@ -91,7 +91,7 @@ async function run() {
       });
     });
     //my movies
-    app.get("/my-movies", verifyToken, async(req, res) => {
+    app.get("/my-movies", async(req, res) => {
       const email = req.query.email
       const result = await movieCollection.find({
 addedBy: email}).toArray()
