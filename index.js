@@ -1,4 +1,6 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const admin = require("firebase-admin");
+const serviceAccount = require("./masterKey.json");
 const express =require("express")
 const cors = require("cors")
 const app = express()
@@ -8,7 +10,9 @@ app.use(express.json())
 app.use(cors())
 
 
-
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 const uri = "mongodb+srv://Movie-Master-Pro:VAfv2AUZORcyoWrg@cluster0.5rsc2du.mongodb.net/?appName=Cluster0";
 
@@ -22,6 +26,7 @@ const client = new MongoClient(uri, {
 });
 const verifyToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
+  // console.log(authorization)
 
   if (!authorization) {
     return res.status(401).send({
@@ -63,7 +68,7 @@ async function run() {
   });
 
 //delete
- app.delete("/movies/:id", verifyToken, async (req, res) => {
+ app.delete("/movies/:id", async (req, res) => {
       const { id } = req.params;
       const result = await movieCollection.deleteOne({ _id: new ObjectId(id) });
 
@@ -75,9 +80,8 @@ async function run() {
     //update
     app.put("/movie/:id", verifyToken,  async (req, res) => {
       const { id } = req.params;
-      // console.log(id)
       const data = req.body;
-      // console.log(data)
+    
       const objectId = new ObjectId(id);
       const filter = { _id:objectId };
       const update = {
@@ -91,17 +95,16 @@ async function run() {
       });
     });
     //my movies
-    app.get("/my-movies", async(req, res) => {
-      const email = req.query.email
-      const result = await movieCollection.find({
-addedBy: email}).toArray()
-      res.send(result)
-    })
+    app.get("/my-movies", verifyToken, async (req, res) => {
+  const email = req.query.email;
+  const result = await movieCollection.find({ addedBy: email }).toArray();
+  res.send(result);
+});
  
 
 
     
-      app.post("/movies", verifyToken,  async (req, res) => {
+      app.post("/movies",verifyToken, async (req, res) => {
       const data = req.body;
       const result = await movieCollection.insertOne(data);
       res.send({
