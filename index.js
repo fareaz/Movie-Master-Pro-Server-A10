@@ -54,7 +54,12 @@ async function run() {
        const watchCollection = db.collection("watchLists");
 
       app.get("/movies", async (req, res) => {
-      const result = await movieCollection.find().toArray();
+      const result = await movieCollection.find().sort({ releaseYear: -1 }).toArray();
+      res.send(result);
+    });
+      app.get("/hero", async (req, res) => {
+      const result = await movieCollection.find().sort({ releaseYear: -1 })
+      .limit(5) .toArray();
       res.send(result);
     });
 
@@ -115,8 +120,6 @@ created_at: -1 }).toArray();
      app.delete("/watch-list/:id", async (req, res) => {
       const { id } = req.params;
       const result = await watchCollection.deleteOne({ _id:id });
-    
-
       res.send({
         success: true,
         result,
