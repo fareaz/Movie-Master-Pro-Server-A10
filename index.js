@@ -73,6 +73,35 @@ async function run() {
       const totalUsers = await usersCollection.countDocuments();
       res.send({ success: true, totalMovies, totalUsers });
     });
+    app.get("/filter-movies", async (req, res) => {
+      try {
+        const { genres, minRating, maxRating } = req.query;
+        const query = {};
+
+        if (genres) {
+          const genreArray = genres
+            .split(",")
+            .map((g) => g.trim())
+            .filter(Boolean);
+          query.genre = { $in: genreArray };
+        }
+
+        if (minRating || maxRating) {
+          query.rating = {};
+          if (minRating) query.rating.$gte = Number(minRating);
+          if (maxRating) query.rating.$lte = Number(maxRating);
+        }
+
+        const result = await movieCollection
+          .find(query)
+          .sort({ rating: -1 })
+          .toArray();
+        res.send({ success: true, count: result.length, result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ success: false, message: "Server error" });
+      }
+    });
 
     app.get("/movies", async (req, res) => {
       const result = await movieCollection
@@ -89,21 +118,21 @@ async function run() {
         .toArray();
       res.send(result);
     });
- app.get("/top-rate", async (req, res) => {
-  const result = await movieCollection
-    .aggregate([
-      {
-        $addFields: {
-          numericRating: { $toDouble: "$rating" } 
-        }
-      },
-      { $sort: { numericRating: -1 } },
-      { $limit: 5 }
-    ])
-    .toArray();
+    app.get("/top-rate", async (req, res) => {
+      const result = await movieCollection
+        .aggregate([
+          {
+            $addFields: {
+              numericRating: { $toDouble: "$rating" },
+            },
+          },
+          { $sort: { numericRating: -1 } },
+          { $limit: 5 },
+        ])
+        .toArray();
 
-  res.send(result);
-});
+      res.send(result);
+    });
 
     app.get("/movieDetails/:id", async (req, res) => {
       const { id } = req.params;
