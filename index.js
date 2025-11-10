@@ -51,6 +51,7 @@ async function run() {
        await client.connect();
        const db = client.db("MovieMaster-db");
        const movieCollection = db.collection("movies");
+       const watchCollection = db.collection("watchLists");
 
       app.get("/movies", async (req, res) => {
       const result = await movieCollection.find().toArray();
@@ -81,7 +82,6 @@ async function run() {
     app.put("/movie/:id", verifyToken,  async (req, res) => {
       const { id } = req.params;
       const data = req.body;
-    
       const objectId = new ObjectId(id);
       const filter = { _id:objectId };
       const update = {
@@ -98,6 +98,18 @@ async function run() {
     app.get("/my-movies", verifyToken, async (req, res) => {
   const email = req.query.email;
   const result = await movieCollection.find({ addedBy: email }).toArray();
+  res.send(result);
+});
+
+ app.post("/watch-list/", async(req, res) => {
+      const data = req.body
+      const result = await watchCollection.insertOne(data)     
+      res.send({result})
+    })
+     app.get("/my-watch-list",  async (req, res) => {
+  const email = req.query.email;
+  const result = await watchCollection.find({ addedBy: email }).sort({ 
+created_at: -1 }).toArray();
   res.send(result);
 });
  
