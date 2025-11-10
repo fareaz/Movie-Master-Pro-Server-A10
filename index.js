@@ -106,13 +106,22 @@ async function run() {
       const result = await watchCollection.insertOne(data)     
       res.send({result})
     })
-     app.get("/my-watch-list",  async (req, res) => {
+     app.get("/my-watch-list", verifyToken, async (req, res) => {
   const email = req.query.email;
   const result = await watchCollection.find({ addedBy: email }).sort({ 
 created_at: -1 }).toArray();
   res.send(result);
 });
- 
+     app.delete("/watch-list/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await watchCollection.deleteOne({ _id:id });
+    
+
+      res.send({
+        success: true,
+        result,
+      });
+    });
 
 
     
