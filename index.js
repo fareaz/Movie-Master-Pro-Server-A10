@@ -25,7 +25,7 @@ const client = new MongoClient(uri, {
 });
 const verifyToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
-  // console.log(authorization)
+  
 
   if (!authorization) {
     return res.status(401).send({
@@ -53,56 +53,43 @@ async function run() {
     const watchCollection = db.collection("watchLists");
     const usersCollection = db.collection("users");
 
-    app.post("/users", async (req, res) => {
-      const newUser = req.body;
-      const email = req.body.email;
-      const query = { email: email };
-      const existingUser = await usersCollection.findOne(query);
-
-      if (existingUser) {
-        res.send({
-          message: "user already exits. do not need to insert again",
-        });
-      } else {
-        const result = await usersCollection.insertOne(newUser);
-        res.send(result);
-      }
-    });
     app.get("/stats", async (req, res) => {
       const totalMovies = await movieCollection.countDocuments();
       const totalUsers = await usersCollection.countDocuments();
       res.send({ success: true, totalMovies, totalUsers });
     });
     app.get("/filter-movies", async (req, res) => {
-      try {
-        const { genres, minRating, maxRating } = req.query;
-        const query = {};
+      const { genres, minRating, maxRating } = req.query;
+      const query = {};
 
-        if (genres) {
-          const genreArray = genres
-            .split(",")
-            .map((g) => g.trim())
-            .filter(Boolean);
-          query.genre = { $in: genreArray };
-        }
-
-        if (minRating || maxRating) {
-          query.rating = {};
-          if (minRating) query.rating.$gte = Number(minRating);
-          if (maxRating) query.rating.$lte = Number(maxRating);
-        }
-
-        const result = await movieCollection
-          .find(query)
-          .sort({ rating: -1 })
-          .toArray();
-        res.send({ success: true, count: result.length, result });
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ success: false, message: "Server error" });
+      if (genres) {
+        const genreArray = genres
+          .split(",")
+          .map((g) => g.trim())
+          .filter(Boolean);
+        query.genre = { $in: genreArray };
       }
-    });
 
+      if (minRating || maxRating) {
+        query.rating = {};
+        if (minRating) query.rating.$gte = Number(minRating);
+        if (maxRating) query.rating.$lte = Number(maxRating);
+      }
+
+      const result = await movieCollection
+        .find(query)
+        .sort({ rating: -1 })
+        .toArray();
+
+      res.send({ success: true, count: result.length, result });
+    });
+    app.get("/search", async (req, res) => {
+      const search_text = req.query.search;
+      const result = await movieCollection
+        .find({ title: { $regex: search_text, $options: "i" } })
+        .toArray();
+      res.send(result);
+    });
     app.get("/movies", async (req, res) => {
       const result = await movieCollection
         .find()
@@ -133,7 +120,6 @@ async function run() {
 
       res.send(result);
     });
-
     app.get("/movieDetails/:id", async (req, res) => {
       const { id } = req.params;
       const _id = new ObjectId(id);
@@ -142,6 +128,26 @@ async function run() {
         success: true,
         result,
       });
+    });
+    app.get("/my-movies", verifyToken, async (req, res) => {
+      const email = req.query.email;
+      const result = await movieCollection.find({ addedBy: email }).toArray();
+      res.send(result);
+    });
+    app.get("/my-watch-list", verifyToken, async (req, res) => {
+      const email = req.query.email;
+      const result = await watchCollection
+        .find({ addedBy: email })
+        .sort({
+          created_at: -1,
+        })
+        .toArray();
+      res.send(result);
+    });
+      app.post("/watch-list/", async (req, res) => {
+      const data = req.body;
+      const result = await watchCollection.insertOne(data);
+      res.send({ result });
     });
 
     //delete
@@ -154,6 +160,32 @@ async function run() {
         result,
       });
     });
+   app.delete("/watch-list/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ownerEmail = req.user?.email || req.query.email || null;
+    let filter = null;
+    try {
+      filter = { _id: new ObjectId(id) };
+    } catch (e) {
+      
+      filter = { movieId: String(id) };
+    }
+    if (ownerEmail) filter.addedBy = ownerEmail;
+    const result = await watchCollection.deleteOne(filter);
+    if (result.deletedCount === 0) {
+      return res.send({
+        success: false,
+      });
+    }
+
+    res.send({ success: true, result });
+  } catch (err) {
+    console.error("DELETE /watch-list/:id error:", err);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+
     //update
     app.put("/movie/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
@@ -170,37 +202,12 @@ async function run() {
         result,
       });
     });
-    //my movies
-    app.get("/my-movies", verifyToken, async (req, res) => {
-      const email = req.query.email;
-      const result = await movieCollection.find({ addedBy: email }).toArray();
-      res.send(result);
-    });
-
+    //post
     app.post("/watch-list/", async (req, res) => {
       const data = req.body;
       const result = await watchCollection.insertOne(data);
       res.send({ result });
     });
-    app.get("/my-watch-list", verifyToken, async (req, res) => {
-      const email = req.query.email;
-      const result = await watchCollection
-        .find({ addedBy: email })
-        .sort({
-          created_at: -1,
-        })
-        .toArray();
-      res.send(result);
-    });
-    app.delete("/watch-list/:id", async (req, res) => {
-      const { id } = req.params;
-      const result = await watchCollection.deleteOne({ _id: id });
-      res.send({
-        success: true,
-        result,
-      });
-    });
-
     app.post("/movies", verifyToken, async (req, res) => {
       const data = req.body;
       const result = await movieCollection.insertOne(data);
@@ -209,7 +216,21 @@ async function run() {
         result,
       });
     });
+    app.post("/users", async (req, res) => {
+      const newUser = req.body;
+      const email = req.body.email;
+      const query = { email: email };
+      const existingUser = await usersCollection.findOne(query);
 
+      if (existingUser) {
+        res.send({
+          message: "user already exits. do not need to insert again",
+        });
+      } else {
+        const result = await usersCollection.insertOne(newUser);
+        res.send(result);
+      }
+    });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
