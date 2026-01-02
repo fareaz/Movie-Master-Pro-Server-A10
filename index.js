@@ -2,6 +2,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 const serviceAccount = require("./masterKey.json");
 const express = require("express");
+require("dotenv").config()
 const cors = require("cors");
 const app = express();
 const port = 3000;
@@ -13,8 +14,9 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
+
 const uri =
-  "mongodb+srv://Movie-Master-Pro:VAfv2AUZORcyoWrg@cluster0.5rsc2du.mongodb.net/?appName=Cluster0";
+  `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.5rsc2du.mongodb.net/?appName=Cluster0`;
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -44,10 +46,50 @@ const verifyToken = async (req, res, next) => {
     });
   }
 };
+const verifyAdmin = async (req, res, next) => {
+  const email = req.user?.email;
+
+  if (email !== "Admin@gmail.com") {
+    return res.status(403).send({ message: "Forbidden access" });
+  }
+
+  const user = await usersCollection.findOne({ email });
+
+  if (!user || user.role !== "admin") {
+    return res.status(403).send({ message: "Admin access required" });
+  }
+
+  next();
+};
+
+// const verifyToken = async (req, res, next) => {
+//   const authorization = req.headers.authorization;
+
+//   if (!authorization) {
+//     return res.status(401).send({
+//       message: "unauthorized access. Token not found!",
+//     });
+//   }
+
+//   const token = authorization.split(" ")[1];
+
+//   try {
+//     const decoded = await admin.auth().verifyIdToken(token);
+
+//     // ✅ THIS LINE WAS MISSING
+//     req.user = decoded;
+
+//     next();
+//   } catch (error) {
+//     return res.status(401).send({
+//       message: "unauthorized access.",
+//     });
+//   }
+// };
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("MovieMaster-db");
     const movieCollection = db.collection("movies");
     const watchCollection = db.collection("watchLists");
@@ -129,12 +171,12 @@ async function run() {
         result,
       });
     });
-    app.get("/my-movies", verifyToken, async (req, res) => {
+    app.get("/my-movies",  async (req, res) => {
       const email = req.query.email;
       const result = await movieCollection.find({ addedBy: email }).toArray();
       res.send(result);
     });
-    app.get("/my-watch-list", verifyToken, async (req, res) => {
+    app.get("/my-watch-list", async (req, res) => {
       const email = req.query.email;
       const result = await watchCollection
         .find({ addedBy: email })
@@ -154,13 +196,12 @@ async function run() {
     app.delete("/movies/:id", async (req, res) => {
       const { id } = req.params;
       const result = await movieCollection.deleteOne({ _id: new ObjectId(id) });
-
       res.send({
         success: true,
         result,
       });
     });
-   app.delete("/watch-list/:id", verifyToken, async (req, res) => {
+   app.delete("/watch-list/:id",  async (req, res) => {
   try {
     const { id } = req.params;
     const ownerEmail = req.user?.email || req.query.email || null;
@@ -231,7 +272,154 @@ async function run() {
         res.send(result);
       }
     });
-    await client.db("admin").command({ ping: 1 });
+    app.get("/stats", async (req, res) => {
+  const totalMovies = await movieCollection.countDocuments();
+  const totalUsers = await usersCollection.countDocuments();
+  res.send({ success: true, totalMovies, totalUsers });
+});
+app.get("/users", async (req, res) => {
+  const email = req.query.email;
+
+  if (email !== "admin@gmail.com") {
+    return res.status(403).send({ message: "Forbidden access" });
+  }
+
+  const adminUser = await usersCollection.findOne({ email });
+
+  if (!adminUser || adminUser.role !== "admin") {
+    return res.status(403).send({ message: "Not an admin" });
+  }
+
+  const users = await usersCollection.find().toArray();
+  res.send(users);
+});
+app.patch("/users/role/:id", async (req, res) => {
+  const { role, adminEmail } = req.body;
+
+  if (adminEmail !== "admin@gmail.com") {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const admin = await usersCollection.findOne({ email: adminEmail });
+
+  if (admin?.role !== "admin") {
+    return res.status(403).send({ message: "Not admin" });
+  }
+
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { role } }
+  );
+
+  res.send(result);
+});
+app.delete("/users/:id", async (req, res) => {
+  const adminEmail = req.query.email;
+
+  if (adminEmail !== "admin@gmail.com") {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const admin = await usersCollection.findOne({ email: adminEmail });
+
+  if (admin?.role !== "admin") {
+    return res.status(403).send({ message: "Not admin" });
+  }
+
+  const result = await usersCollection.deleteOne({
+    _id: new ObjectId(req.params.id),
+  });
+
+  res.send(result);
+});
+app.get("/admin/movies", async (req, res) => {
+  const email = req.query.email;
+
+  // admin check
+  const admin = await usersCollection.findOne({ email });
+
+  if (!admin || admin.role !== "admin") {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const movies = await movieCollection
+    .find()
+    .sort({ created_at: -1 })
+    .toArray();
+
+  res.send(movies);
+});
+app.patch("/admin/movies/:id", async (req, res) => {
+  const { id } = req.params;
+  const { email, _id, ...updateData } = req.body; // 🔥 _id বাদ দাও
+
+  const admin = await usersCollection.findOne({ email });
+
+  if (!admin || admin.role !== "admin") {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const result = await movieCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: updateData }
+  );
+
+  res.send(result);
+});
+app.delete("/admin/movies/:id", async (req, res) => {
+  const email = req.query.email;
+
+  const admin = await usersCollection.findOne({ email });
+
+  if (!admin || admin.role !== "admin") {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const result = await movieCollection.deleteOne({
+    _id: new ObjectId(req.params.id),
+  });
+
+  res.send(result);
+});
+app.get("/users/profile/:email", async (req, res) => {
+  const email = req.params.email;
+
+  const user = await usersCollection.findOne({ email });
+
+  if (!user) {
+    return res.status(404).send({ message: "User not found" });
+  }
+
+  res.send(user);
+});
+app.patch("/users/profile/:email", async (req, res) => {
+  const email = req.params.email;
+  const { name, photoURL } = req.body;
+
+  const result = await usersCollection.updateOne(
+    { email },
+    {
+      $set: {
+        name,
+        photoURL,
+      },
+    }
+  );
+
+  res.send(result);
+});
+ app.get("/users/:email/role",  async (req, res) => {
+  const email = req.params.email;
+
+  
+
+  const user = await usersCollection.findOne({ email });
+
+  res.send({
+    role: user?.role ,
+  });
+});
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
